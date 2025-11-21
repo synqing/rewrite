@@ -21,7 +21,6 @@
 
 // External dependencies -------------------------------------------------------------
 #include <WiFi.h>         // Needed for Station Mode
-#include <esp_now.h>      // P2P wireless communication library (p2p.h below)
 #include <esp_random.h>   // RNG Functions
 #include <FastLED.h>      // Handles LED color data and display
 #include <FS.h>           // Filesystem functions (bridge_fs.h below)
@@ -54,7 +53,6 @@
 #include "i2s_audio.h"        // I2S Microphone audio capture
 #include "led_utilities.h"    // LED color/transform utility functions
 #include "noise_cal.h"        // Background noise removal
-#include "p2p.h"              // Sensory Sync handling
 #include "buttons.h"          // Watch the status of buttons
 #include "knobs.h"            // Watch the status of knobs...
 #include "serial_menu.h"      // Watch the Serial port... *sigh*
@@ -62,6 +60,8 @@
 // #include "audio_guard.h"      // Audio pipeline protection layer
 #include "audio_raw_state.h"  // Phase 2A: Audio state encapsulation (low risk)
 #include "audio_processed_state.h"  // Phase 2B: Processed audio state (medium risk)
+#include "phase0_crash_dump.h"  // Phase 0: Crash dump & recovery system
+#include "test/performance_regression_suite.h"  // Phase 0: Performance validation
 #include "system.h"           // Watch how fast I can check if settings were updated... yada yada..
 #include "GDFT.h"             // Conversion to (and post-processing of) frequency data! (hey, something cool!)
 #include "lightshow_modes.h"  // --- FINALLY, the FUN STUFF!
@@ -170,8 +170,11 @@ void setup() {
     // A hardware UART might be better for this kind of early error.
     vTaskDelay(10);
   }
-  
+
   init_system();  // (system.h) Initialize all hardware and arrays
+
+  // Phase 0: Check for crash dump from previous boot
+  Phase0::CrashDump::initialize();
 
   // Create the serial mutex before starting any other tasks
   serial_mutex = xSemaphoreCreateMutex();
@@ -337,14 +340,8 @@ void main_loop_core0() {
   function_id = 3;
   check_serial(t_now);  // (serial_menu.h)
   // Check if UART commands are available
-  
 
   function_id = 4;
-  // FUCK P2P - DISABLED
-  // run_p2p();  // (p2p.h)
-  // Process P2P network packets to synchronize units
-
-  function_id = 5;
 #ifdef ENABLE_PERFORMANCE_MONITORING
   PERF_MONITOR_START();
 #endif

@@ -12,9 +12,7 @@
 //    SHORT PRESS: INCREMENT LIGHTSHOW MODE
 //    LONG PRESS:  TOGGLE MIRRORING
 //
-// If buttons are touched on a unit that isn't set to MAIN,
-// it will flash all units in the network (p2p.h) to identify
-// which unit's buttons to touch instead to affect changes.
+// Buttons always respond to input (P2P removed)
 
 void check_buttons(uint32_t t_now) {
   #ifdef ARDUINO_ESP32S3_DEV
@@ -31,11 +29,7 @@ void check_buttons(uint32_t t_now) {
     }
 
     if (t_now - noise_button.last_down > 250 && noise_button.last_up < noise_button.last_down) { // Still held, and for more than 250ms (long press)
-      if (CONFIG.IS_MAIN_UNIT || main_override) { // If main, clear noise cal
-        clear_noise_cal();
-      } else { // if not, complain
-        identify_main_unit();
-      }
+      clear_noise_cal();
 
       noise_button.last_up = t_now; // count this event as a release time to prevent this function from repeating
     }
@@ -47,12 +41,7 @@ void check_buttons(uint32_t t_now) {
       uint32_t press_duration = noise_button.last_up - noise_button.last_down; // Get press duration
 
       if (press_duration <= 250) { // if it was a short press
-        if (CONFIG.IS_MAIN_UNIT || main_override) { // if main unit, start noise cal
-          noise_transition_queued = true; // See run_transition_fade() in led_utilities.h
-        }
-        else { // Otherwise, complain
-          identify_main_unit();
-        }
+        noise_transition_queued = true; // See run_transition_fade() in led_utilities.h
       }
     }
   }
@@ -66,12 +55,8 @@ void check_buttons(uint32_t t_now) {
     }
 
     if (t_now - mode_button.last_down > 250 && mode_button.last_up < mode_button.last_down) {
-      if (CONFIG.IS_MAIN_UNIT || main_override) {
-        CONFIG.MIRROR_ENABLED = !CONFIG.MIRROR_ENABLED;
-        save_config_delayed();
-      } else {
-        identify_main_unit();
-      }
+      CONFIG.MIRROR_ENABLED = !CONFIG.MIRROR_ENABLED;
+      save_config_delayed();
       mode_button.last_up = t_now;
     }
   } else if (mode_button.pin >= 0 && digitalRead(mode_button.pin) == HIGH) {
@@ -91,14 +76,10 @@ void check_buttons(uint32_t t_now) {
 
       if (press_duration <= 250 && skip_click == false) {
         if (mode_transition_queued == false) {
-          if (CONFIG.IS_MAIN_UNIT || main_override) {
-            mode_transition_queued = true; // See run_transition_fade() in led_utilities.h
-            mode_destination = -1;
+          mode_transition_queued = true; // See run_transition_fade() in led_utilities.h
+          mode_destination = -1;
 
-            save_config_delayed();
-          } else {
-            identify_main_unit();
-          }
+          save_config_delayed();
         }
       }
     }

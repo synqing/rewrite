@@ -62,7 +62,6 @@ struct conf {
   uint8_t  CHROMAGRAM_RANGE;
   bool     STANDBY_DIMMING;
   bool     REVERSE_ORDER;
-  bool     IS_MAIN_UNIT;
   uint32_t MAX_CURRENT_MA;
   bool     TEMPORAL_DITHERING;
   bool     AUTO_COLOR_SHIFT;
@@ -106,7 +105,6 @@ SensoryBridge::Config::conf CONFIG = {
   84,                  // CHROMAGRAM_RANGE - Use bins 0-83 (respecting Nyquist at 8kHz)
   true,                // STANDBY_DIMMING
   false,               // REVERSE_ORDER
-  false,               // IS_MAIN_UNIT
   1500,                // MAX_CURRENT_MA
   true,                // TEMPORAL_DITHERING
   true,                // AUTO_COLOR_SHIFT - Enabled for both channels
@@ -282,12 +280,6 @@ volatile uint16_t function_id = 0;
 volatile uint16_t function_hits[32] = {0};
 float SYSTEM_FPS = 0.0;
 float LED_FPS    = 0.0;
-
-// ------------------------------------------------------------
-// SensorySync P2P network (p2p.h) ----------------------------
-
-bool     main_override = true;
-uint32_t last_rx_time = 0;
 
 // ------------------------------------------------------------
 // Buttons (buttons.h) ----------------------------------------

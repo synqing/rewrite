@@ -182,9 +182,6 @@ void dump_info() {
   USBSerial.print("CONFIG.REVERSE_ORDER: ");
   USBSerial.println(CONFIG.REVERSE_ORDER);
 
-  USBSerial.print("CONFIG.IS_MAIN_UNIT: ");
-  USBSerial.println(CONFIG.IS_MAIN_UNIT);
-
   USBSerial.print("CONFIG.MAX_CURRENT_MA: ");
   USBSerial.println(CONFIG.MAX_CURRENT_MA);
 
@@ -244,12 +241,6 @@ void dump_info() {
 
   USBSerial.print("noise_iterations: ");
   USBSerial.println(noise_iterations);
-
-  USBSerial.print("main_override: ");
-  USBSerial.println(main_override);
-
-  USBSerial.print("last_rx_time: ");
-  USBSerial.println(last_rx_time);
 
   USBSerial.print("next_save_time: ");
   USBSerial.println(next_save_time);
@@ -478,14 +469,36 @@ void parse_command(char* command_buf) {
 
   }
 
-  // Returns whether or not this is a "MAIN" unit -----------
-  else if (strcmp(command_buf, "get_main_unit") == 0) {
+  // View crash dump from previous boot ----------------------
+  else if (strcmp(command_buf, "D") == 0 || strcmp(command_buf, "dump") == 0) {
+    Phase0::CrashDump::printCrashDump();
+  }
 
-    tx_begin();
-    USBSerial.print("CONFIG.IS_MAIN_UNIT: ");
-    USBSerial.println(CONFIG.IS_MAIN_UNIT);
-    tx_end();
+  // Clear crash dump ----------------------------------------
+  else if (strcmp(command_buf, "C") == 0 || strcmp(command_buf, "clear_dump") == 0) {
+    Phase0::CrashDump::clearCrashDump();
+    USBSerial.println("Crash dump cleared");
+  }
 
+  // Trigger manual crash dump (for testing) ----------------
+  else if (strcmp(command_buf, "test_crash") == 0) {
+    USBSerial.println("Triggering manual crash dump...");
+    Phase0::CrashDump::triggerManualDump("Manual test dump");
+    delay(100);
+    reboot();
+  }
+
+  // Run performance regression tests ------------------------
+  else if (strcmp(command_buf, "perf_test") == 0) {
+    USBSerial.println("Running performance regression tests...\n");
+    bool passed = PerformanceTest::runAll(true);
+    USBSerial.println(passed ? "\n✅ All tests PASSED" : "\n❌ Some tests FAILED");
+  }
+
+  // Capture golden performance metrics ----------------------
+  else if (strcmp(command_buf, "perf_golden") == 0) {
+    USBSerial.println("Capturing golden performance metrics...\n");
+    PerformanceTest::captureGolden();
   }
 
   // Returns the reason why the ESP32 last rebooted ---------
@@ -709,31 +722,6 @@ void parse_command(char* command_buf) {
     // PARSER #############################
 
     // Now react accordingly:
-
-    // Set if this Sensory Bridge is a MAIN Unit --------------
-    if (strcmp(command_type, "set_main_unit") == 0) {
-      bool good = false;
-      if (strcmp(command_data, "true") == 0) {
-        good = true;
-        CONFIG.IS_MAIN_UNIT = true;
-      } else if (strcmp(command_data, "false") == 0) {
-        good = true;
-        CONFIG.IS_MAIN_UNIT = false;
-      } else {
-        bad_command(command_type, command_data);
-      }
-
-      if (good) {
-        save_config();
-
-        tx_begin();
-        USBSerial.print("CONFIG.IS_MAIN_UNIT: ");
-        USBSerial.println(CONFIG.IS_MAIN_UNIT);
-        tx_end();
-
-        reboot();
-      }
-    }
 
     // Run DC Offset Diagnostics ------------------------------
     else if (strcmp(command_type, "dc_diag") == 0) {
