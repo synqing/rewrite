@@ -469,6 +469,25 @@ void parse_command(char* command_buf) {
 
   }
 
+  // View crash dump from previous boot ----------------------
+  else if (strcmp(command_buf, "D") == 0 || strcmp(command_buf, "dump") == 0) {
+    Phase0::CrashDump::printCrashDump();
+  }
+
+  // Clear crash dump ----------------------------------------
+  else if (strcmp(command_buf, "C") == 0 || strcmp(command_buf, "clear_dump") == 0) {
+    Phase0::CrashDump::clearCrashDump();
+    USBSerial.println("Crash dump cleared");
+  }
+
+  // Trigger manual crash dump (for testing) ----------------
+  else if (strcmp(command_buf, "test_crash") == 0) {
+    USBSerial.println("Triggering manual crash dump...");
+    Phase0::CrashDump::triggerManualDump("Manual test dump");
+    delay(100);
+    reboot();
+  }
+
   // Returns the reason why the ESP32 last rebooted ---------
   else if (strcmp(command_buf, "reset_reason") == 0) {
     tx_begin();
