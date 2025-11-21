@@ -2,6 +2,8 @@
   Sensory Bridge FILESYSTEM ACCESS
   ----------------------------------------*/
 
+#include "phase0_filesystem_safe.h"
+
 extern void reboot(); // system.h
 
 void update_config_filename(uint32_t input) {
@@ -58,64 +60,38 @@ bool config_save_pending = false;
 
 // Save configuration to LittleFS
 void save_config() {
-  // FUCK THE FILESYSTEM - DO NOTHING
-  if (debug_mode) {
-    USBSerial.println("CONFIG SAVE BYPASSED - NO FILESYSTEM");
-  }
+  // Queue the actual save to happen in main loop
+  config_save_pending = true;
 }
 
 // Actual file write - call this from main loop when safe
 void do_config_save() {
-  // FUCK THE FILESYSTEM - DO NOTHING
-  return;
-  
   if (!config_save_pending) return;
-  
+
   config_save_pending = false;
   lock_leds();
-  
+
   if (debug_mode) {
-    USBSerial.print("LITTLEFS: ");
+    USBSerial.print("SAVING CONFIG: ");
   }
-  
-  // Multiple yields to ensure watchdog doesn't trigger
-  yield();
-  delay(1);  // Give time for other tasks
-  yield();
-  
-  File file = LittleFS.open(config_filename, FILE_WRITE);
-  if (!file) {
+
+  // Use SafeFile for atomic write with CRC32 validation
+  auto result = Phase0::Filesystem::SafeFile::write(
+    config_filename,
+    &CONFIG,
+    sizeof(CONFIG)
+  );
+
+  if (!result.ok()) {
     if (debug_mode) {
-      USBSerial.print("Failed to open ");
-      USBSerial.print(config_filename);
-      USBSerial.println(" for writing!");
+      USBSerial.printf("FAILED - %s\n", result.statusString());
     }
-    unlock_leds();
-    return;
-  }
-  
-  file.seek(0);
-  uint8_t config_buffer[512];
-  memcpy(config_buffer, &CONFIG, sizeof(CONFIG));
-  
-  // Write in small chunks with delays
-  for (uint16_t i = 0; i < 512; i += 32) {
-    size_t bytes_to_write = (32 < (512 - i)) ? 32 : (512 - i);
-    file.write(&config_buffer[i], bytes_to_write);
-    if (i % 64 == 0) {
-      yield();
-      vTaskDelay(1);  // Use RTOS delay instead of blocking delay
+  } else {
+    if (debug_mode) {
+      USBSerial.printf("SUCCESS (%zu bytes)\n", result.bytes_processed);
     }
   }
-  
-  file.close();
-  
-  if (debug_mode) {
-    USBSerial.print("WROTE ");
-    USBSerial.print(config_filename);
-    USBSerial.println(" SUCCESSFULLY");
-  }
-  
+
   unlock_leds();
 }
 
@@ -133,41 +109,33 @@ void save_config_delayed() {
 void load_config() {
   lock_leds();
   if (debug_mode) {
-    USBSerial.print("LITTLEFS: ");
+    USBSerial.print("LOADING CONFIG: ");
   }
 
-  bool queue_factory_reset = false;
-  File file = LittleFS.open(config_filename, FILE_READ);
-  if (!file) {
+  size_t bytes_read = 0;
+  auto result = Phase0::Filesystem::SafeFile::read(
+    config_filename,
+    &CONFIG,
+    sizeof(CONFIG),
+    &bytes_read
+  );
+
+  if (!result.ok()) {
     if (debug_mode) {
-      USBSerial.print("Failed to open ");
-      USBSerial.print(config_filename);
-      USBSerial.println(" for reading!");
-      USBSerial.println("Initializing with default CONFIG values...");
+      USBSerial.printf("FAILED - %s\n", result.statusString());
+      USBSerial.println("Using default CONFIG values...");
     }
-    // Initialize with defaults when file doesn't exist
+    // Initialize with defaults when file doesn't exist or is corrupt
     init_config_defaults();
     save_config();  // Create the file with defaults
-    unlock_leds();  // CRITICAL: Must unlock before returning!
+    unlock_leds();
     return;
-  } else {
-    file.seek(0);
-    uint8_t config_buffer[512];
-    for (uint16_t i = 0; i < sizeof(CONFIG); i++) {
-      config_buffer[i] = file.read();
-    }
-
-    memcpy(&CONFIG, config_buffer, sizeof(CONFIG));
-
-    if (debug_mode) {
-      USBSerial.println("READ CONFIG SUCCESSFULLY");
-    }
   }
-  file.close();
 
-  if (queue_factory_reset == true) {
-    factory_reset();
+  if (debug_mode) {
+    USBSerial.printf("SUCCESS (%zu bytes)\n", bytes_read);
   }
+
   unlock_leds();
 }
 
@@ -177,42 +145,28 @@ void save_ambient_noise_calibration() {
   if (debug_mode) {
     USBSerial.print("SAVING AMBIENT_NOISE PROFILE... ");
   }
-  
-  // CRITICAL: Yield to watchdog before file operations
-  yield();
-  
-  File file = LittleFS.open("/noise_cal.bin", FILE_WRITE);
-  if (!file) {
-    if (debug_mode) {
-      USBSerial.println("Failed to open file for writing!");
-    }
-    unlock_leds();  // CRITICAL: Must unlock before returning!
-    return;
-  }
 
-  bytes_32 temp;
-
-  file.seek(0);
+  // Convert noise samples to float array for saving
+  float noise_float[NUM_FREQS];
   for (uint16_t i = 0; i < NUM_FREQS; i++) {
-    float in_val = float(noise_samples[i]);
-
-    temp.long_val_float = in_val;
-
-    file.write(temp.bytes[0]);
-    file.write(temp.bytes[1]);
-    file.write(temp.bytes[2]);
-    file.write(temp.bytes[3]);
-    
-    // Yield every 8 frequencies to prevent watchdog timeout
-    if ((i & 0x07) == 0) {
-      yield();
-      vTaskDelay(1);  // Give time to other tasks
-    }
+    noise_float[i] = float(noise_samples[i]);
   }
 
-  file.close();
-  if (debug_mode) {
-    USBSerial.println("SAVE COMPLETE");
+  // Use SafeFile for atomic write with CRC32 validation
+  auto result = Phase0::Filesystem::SafeFile::write(
+    "/noise_cal.bin",
+    noise_float,
+    sizeof(noise_float)
+  );
+
+  if (!result.ok()) {
+    if (debug_mode) {
+      USBSerial.printf("FAILED - %s\n", result.statusString());
+    }
+  } else {
+    if (debug_mode) {
+      USBSerial.println("SUCCESS");
+    }
   }
 
   unlock_leds();
@@ -224,30 +178,33 @@ void load_ambient_noise_calibration() {
   if (debug_mode) {
     USBSerial.print("LOADING AMBIENT_NOISE PROFILE... ");
   }
-  File file = LittleFS.open("/noise_cal.bin", FILE_READ);
-  if (!file) {
+
+  // Load into float array first
+  float noise_float[NUM_FREQS];
+  size_t bytes_read = 0;
+
+  auto result = Phase0::Filesystem::SafeFile::read(
+    "/noise_cal.bin",
+    noise_float,
+    sizeof(noise_float),
+    &bytes_read
+  );
+
+  if (!result.ok()) {
     if (debug_mode) {
-      USBSerial.println("Failed to open file for reading!");
+      USBSerial.printf("FAILED - %s\n", result.statusString());
     }
-    unlock_leds();  // CRITICAL: Must unlock before returning!
+    unlock_leds();
     return;
   }
 
-  bytes_32 temp;
-
-  file.seek(0);
+  // Convert back to SQ15x16 format
   for (uint16_t i = 0; i < NUM_FREQS; i++) {
-    temp.bytes[0] = file.read();
-    temp.bytes[1] = file.read();
-    temp.bytes[2] = file.read();
-    temp.bytes[3] = file.read();
-
-    noise_samples[i] = SQ15x16(temp.long_val_float);
+    noise_samples[i] = SQ15x16(noise_float[i]);
   }
 
-  file.close();
   if (debug_mode) {
-    USBSerial.println("LOAD COMPLETE");
+    USBSerial.println("SUCCESS");
   }
 
   unlock_leds();
@@ -257,23 +214,18 @@ void load_ambient_noise_calibration() {
 void init_fs() {
   lock_leds();
   USBSerial.print("INIT FILESYSTEM: ");
-  USBSerial.println("BYPASSED - FUCK IT");
-  
-  // Just use defaults and skip filesystem entirely
+
   update_config_filename(FIRMWARE_VERSION);
   init_config_defaults();
-  
-  // Set some reasonable defaults for LED testing
-  CONFIG.LED_COUNT = 160;
-  CONFIG.LED_TYPE = LED_NEOPIXEL;
-  CONFIG.LIGHTSHOW_MODE = LIGHT_MODE_SNAPWAVE;
-  CONFIG.PHOTONS = 0.5;
-  CONFIG.CHROMA = 0.5;
-  CONFIG.MOOD = 0.5;
-  CONFIG.SATURATION = 1.0;
-  CONFIG.AUTO_COLOR_SHIFT = true;
-  CONFIG.SAMPLES_PER_CHUNK = 128;  // Force lower latency
-  CONFIG.SAMPLE_RATE = 32000;  // 32kHz for S3
-  
+
+  // Initialize safe filesystem with format on failure
+  auto result = Phase0::Filesystem::SafeFile::initialize(true);
+  if (!result.ok()) {
+    USBSerial.printf("FAILED - %s\n", result.statusString());
+    USBSerial.println("Using defaults only (no persistence)");
+  } else {
+    USBSerial.println("SUCCESS");
+  }
+
   unlock_leds();
 }
