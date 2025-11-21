@@ -21,7 +21,6 @@
 
 // External dependencies -------------------------------------------------------------
 #include <WiFi.h>         // Needed for Station Mode
-#include <esp_now.h>      // P2P wireless communication library (p2p.h below)
 #include <esp_random.h>   // RNG Functions
 #include <FastLED.h>      // Handles LED color data and display
 #include <FS.h>           // Filesystem functions (bridge_fs.h below)
@@ -54,7 +53,6 @@
 #include "i2s_audio.h"        // I2S Microphone audio capture
 #include "led_utilities.h"    // LED color/transform utility functions
 #include "noise_cal.h"        // Background noise removal
-#include "p2p.h"              // Sensory Sync handling
 #include "buttons.h"          // Watch the status of buttons
 #include "knobs.h"            // Watch the status of knobs...
 #include "serial_menu.h"      // Watch the Serial port... *sigh*
@@ -337,14 +335,8 @@ void main_loop_core0() {
   function_id = 3;
   check_serial(t_now);  // (serial_menu.h)
   // Check if UART commands are available
-  
 
   function_id = 4;
-  // FUCK P2P - DISABLED
-  // run_p2p();  // (p2p.h)
-  // Process P2P network packets to synchronize units
-
-  function_id = 5;
 #ifdef ENABLE_PERFORMANCE_MONITORING
   PERF_MONITOR_START();
 #endif
