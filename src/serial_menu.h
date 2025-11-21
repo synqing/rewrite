@@ -488,6 +488,19 @@ void parse_command(char* command_buf) {
     reboot();
   }
 
+  // Run performance regression tests ------------------------
+  else if (strcmp(command_buf, "perf_test") == 0) {
+    USBSerial.println("Running performance regression tests...\n");
+    bool passed = PerformanceTest::runAll(true);
+    USBSerial.println(passed ? "\n✅ All tests PASSED" : "\n❌ Some tests FAILED");
+  }
+
+  // Capture golden performance metrics ----------------------
+  else if (strcmp(command_buf, "perf_golden") == 0) {
+    USBSerial.println("Capturing golden performance metrics...\n");
+    PerformanceTest::captureGolden();
+  }
+
   // Returns the reason why the ESP32 last rebooted ---------
   else if (strcmp(command_buf, "reset_reason") == 0) {
     tx_begin();

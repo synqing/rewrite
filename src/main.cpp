@@ -61,6 +61,7 @@
 #include "audio_raw_state.h"  // Phase 2A: Audio state encapsulation (low risk)
 #include "audio_processed_state.h"  // Phase 2B: Processed audio state (medium risk)
 #include "phase0_crash_dump.h"  // Phase 0: Crash dump & recovery system
+#include "test/performance_regression_suite.h"  // Phase 0: Performance validation
 #include "system.h"           // Watch how fast I can check if settings were updated... yada yada..
 #include "GDFT.h"             // Conversion to (and post-processing of) frequency data! (hey, something cool!)
 #include "lightshow_modes.h"  // --- FINALLY, the FUN STUFF!
